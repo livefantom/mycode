@@ -10,13 +10,13 @@
 #define MAX_LINE	1024*4
 #define _USE_FORK
 //#define _USE_PTHREAD
-char sndbuf[MAX_LINE] = "HTTP/1.1 200 OK\n"
-"Date: Tue, 08 Jul 2008 13:04:53 GMT\n"
-"Server: Apache/2.2.4 (Unix)\n"
-"Content-Length: 1\n"
-"Keep-Alive: timeout=5, max=100\n"
-"Connection: Keep-Alive\n"
-"Content-Type: text/html; charset=GBK\n\n";
+char http_resp[MAX_LINE] = "HTTP/1.1 200 OK\n"
+    "Date: Tue, 08 Jul 2008 13:04:53 GMT\n"
+    "Server: Apache/2.2.4 (Unix)\n"
+    "Content-Length: 1\n"
+    "Keep-Alive: timeout=5, max=100\n"
+    "Connection: Keep-Alive\n"
+    "Content-Type: text/html; charset=GBK\n\n";
 
 // sighandler_t
 void sig_chld(int signo)
@@ -39,29 +39,30 @@ void* str_echo(void* arg)
 #endif
 	srand(pid);
 	printf("\t\\_ pid:%ld> child starting...\n", (long) pid);
-	while(1)
+	do
 	{
 		rcvlen = read(*sockfd, rcvbuf, MAX_LINE);
-//		printf("\t\\_ pid:%ld> received %d bytes\n", (long) pid, rcvlen);
 		if (rcvlen > 0)
 		{
+            printf("\t\\_ pid:%ld> received %d bytes\n", (long) pid, rcvlen);
 			int sec = rand()%20;
 			printf("\t\\_ pid:%ld> sleep %d seconds...\n", (long) pid, sec);
 			sleep( sec );	// wait for client receive timeout!!
-			//write(*sockfd, rcvbuf, rcvlen);
-			int offset = strlen(sndbuf);
-			sprintf(sndbuf + offset, "%d", rand()%2);
-			write(*sockfd, sndbuf, strlen(sndbuf));
-			sndbuf[offset] = 0;
+			//memcpy(sndbuf, rcvbuf, rcvlen);
+			snprintf( sndbuf, MAX_LINE, "%s%d", http_resp, rand()%2 );
+            write(*sockfd, sndbuf, strlen(sndbuf)); // TODO: error proc.
 			//continue;
-			break;
 		}
 		else if (rcvlen < 0 && errno == EINTR)
+        {
 			continue;
+        }
 		else if (rcvlen < 0)
+        {
 			printf("\t\\_ pid:%ld> read error!\n", (long) pid);
-		break;
-	}
+        }
+        // else if rcvlen == 0, remote closed.
+	} while(false);
 	close(*sockfd);
 }
 
@@ -110,7 +111,7 @@ void* svr_func(void* arg)
 		// int accept(int sockfd, sturct sockaddr* cliaddr, socklen_t* addrlen);
 		if ( -1 == (connfd = accept(listenfd, (struct sockaddr*) &cltaddr, &cltlen)) )
 		{
-			if (errno = EINTR)	// this may occur when sighandler return!
+			if (EINTR == errno)	// this may occur when sighandler return!
 				continue;
 			else
 				printf("pid:%ld> accept error:%d\n", getpid(), errno);
